@@ -1,0 +1,81 @@
+name: ubuntu 20.04 caffe
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+
+      - uses: actions/checkout@v2
+      - name: Prepare
+        run: |
+          sudo dpkg --add-architecture i386 && sudo apt update
+          sudo apt install aptitude
+          sudo aptitude remove -y '?narrow(?installed,?version(deb.sury.org))'
+          cd wine-tkg-git 
+          sed -i 's/distro=""/distro="debuntu"/' customization.cfg
+          touch tarplz
+          
+      - name: Apply recipe
+        run: |
+          ldd --version
+          cd wine-tkg-git
+          cat <<'EOF' >> customization.cfg
+
+          # Wine flavor
+          # -------------------------------------
+          _staging_version=""
+          _plain_version=""
+          _use_staging="true"
+          _use_fsync="true"
+          _use_vkd3dlib="false"
+          _fsync_futex2="true"
+          _fsync_futex_waitv="true"
+
+          # User patches
+          # -------------------------------------
+          _user_patches_no_confirm="true" # apply all user patches without confirmation
+
+          # Proton patches
+          # -------------------------------------
+          _protonify="true" # misc proton patches and hacks
+          _proton_rawinput="true" # compatible rawinput patchset
+          _proton_fs_hack="true" # allows resolution changes for fullscreen games without changing desktop resolution
+          _proton_mf_hacks="true" # workarounds to prevent crashes on some mf functions
+          _proton_eac_support="true" # enable support for Proton's EAC bridge
+          _proton_battleye_support="true" # enable support for Proton's Battleye runtime
+          _win10_default="true" # set the default wine version to win10 instead of win7
+          _FS_bypass_compositor="true" # bypass compositor in fullscreen modes
+
+          # Games-specific patches
+          # -------------------------------------
+          _staging_pulse_disable="true" # disable staging PA patchset
+          _childwindow_fix="true" # child window support for vulkan
+
+          # Legacy patches
+          # -------------------------------------
+
+          # Other patches
+          # -------------------------------------
+          _use_josh_flat_theme="true" # makes wine dialogs and menus less win95-ish
+          _nvidia_hate="true" # prevents building of nvapi/nvapi64, nvcuda, nvcuvid and nvencodeapi/nvencodeapi64 libs
+
+          EOF
+          
+      - name: Build
+        run: |
+          cd wine-tkg-git
+          yes|./non-makepkg-build.sh
+
+      - name: Archive the artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: wine-tkg-caffe
+          path: wine-tkg-git/non-makepkg-builds
+          if-no-files-found: error
